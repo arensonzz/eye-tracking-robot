@@ -1,0 +1,4 @@
+RPi.GPIO==0.7.1
+gpiozero==1.6.2
+pigpio==1.78
+sshkeyboard==2.3.1
