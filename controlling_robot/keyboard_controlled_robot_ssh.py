@@ -23,7 +23,6 @@ def actions(key):
 
 
 try:
-    sleep(2)
     robot.distance_led.on()
     robot.enable_auto_stop()
     listen_keyboard(on_press=actions)

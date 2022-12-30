@@ -13,8 +13,8 @@ class DistanceLed(RGBLED):
                  pin_factory=None, max_distance: int = 1, distance_sensor: DistanceSensor = None):
         super().__init__(red, green, blue, active_high, initial_value, pwm, pin_factory)
         self._is_active = False
-        # _range_to_color is used to convert a distance value into corresponding color value. Array has 101 elements so
-        #
+        # _range_to_color is used to convert a distance value into corresponding color value. Array has 101 elements
+        # and first 30%
         self._range_to_color = [(0.5, 0, 0)] * 30 + [(0.5, 0.5, 0)] * 36 + [(0, 0, 0.5)] * 35
         self._max_distance = max_distance
         self._distance_sensor = distance_sensor
@@ -55,9 +55,9 @@ class Robot(object):
         self._distance_sensor = DistanceSensor(**distance_sensor_pins, max_distance=2, pin_factory=self._pwm_factory,
                                                threshold_distance=0.6)
         self.distance_led = DistanceLed(**distance_led_pins, max_distance=2, distance_sensor=self._distance_sensor)
-        self._auto_stop_event = Event()  # _stop_when_in_range continues to work until this is set
-        self.enable_auto_stop()
-        self.distance_led.on()
+        self._auto_stop_event = Event()  # _auto_stop continues to work until this is set
+        self.disable_auto_stop()
+        self._escape_event = Event()  # forward move is disabled if this is set
 
         self._current_job_thread = None
         self._auto_stop_thread = Thread(target=self._auto_stop, args=())
@@ -66,18 +66,20 @@ class Robot(object):
 
     def _auto_stop(self):
         while not self._auto_stop_event.is_set():
+            # If robot is in range of the obstacle then activate escape event and disable auto stop until escaped
             if self._distance_sensor.in_range:
                 self.stop()
-                #  self.disable_auto_stop()
+                self._auto_stop_event.set()
+                self._escape_event.set()
             sleep(0.1)
 
     def enable_auto_stop(self):
-        #  self.distance_led.on()
         self._auto_stop_event.clear()
+        self._escape_event.clear()
 
     def disable_auto_stop(self):
-        # self.distance_led.off()
         self._auto_stop_event.set()
+        self._escape_event.clear()
 
     def stop(self):
         self._left_motors.stop()
@@ -95,6 +97,8 @@ class Robot(object):
                 self._left_motors.forward(speed)
                 self._right_motors.backward(speed)
             case Direction.FORWARD:
+                if self._escape_event.is_set() and self._distance_sensor.in_range:
+                    return
                 self._left_motors.forward(speed)
                 self._right_motors.forward(speed)
             case Direction.BACKWARD:
@@ -102,12 +106,11 @@ class Robot(object):
                 self._right_motors.backward(speed)
 
         sleep(duration_sec)
-        #  Enable auto stop daemon if escaped from the obstacle
-        #  if self._auto_stop_event.is_set():
-        #      if not self._distance_sensor.in_range:
-        #          self.enable_auto_stop()
-
         self.stop()
+        #  Enable auto stop daemon if escaped from the obstacle
+        if self._escape_event.is_set():
+            if not self._distance_sensor.in_range:
+                self.enable_auto_stop()
 
     def move(self, direction: Direction, duration_sec: float, speed: float):
         self._current_job_thread = Thread(target=self._move_callback, args=(direction, duration_sec, speed))
