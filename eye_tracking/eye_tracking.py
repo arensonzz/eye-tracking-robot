@@ -48,14 +48,15 @@ class PositionThread(Thread):
 
     def run(self):
         global POSITION_COUNTS
-        while not self.stopped.wait(2):
+        while not self.stopped.wait(1.5):
             arr = list(POSITION_COUNTS.items())
             max = arr[0]
             for key, val in arr:
                 if val > max[1]:
                     max = (key, val)
             print(max)
-            client.publish("eye_tracking/rpi", max[0])
+            if max[1] >= 10:
+                client.publish("eye_tracking/rpi", max[0])
 
             POSITION_COUNTS = {"left": 0, "right": 0, "up": 0, "down": 0, "center": 0}
 

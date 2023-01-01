@@ -1,4 +1,6 @@
+from __future__ import annotations
 from enum import Enum, auto
+
 from threading import Event, Thread
 from time import sleep
 
@@ -43,6 +45,45 @@ class Direction(Enum):
     BACKWARD = auto()
 
 
+class CurrentMove(Thread):
+    def __init__(self, robot: Robot, direction: Direction, duration_sec: int, speed: float, is_stuck: Event,
+                 daemon=False):
+        super().__init__(daemon=daemon)
+        self._robot = robot
+        self._direction = direction
+        self._duration_sec = duration_sec
+        self._speed = speed
+        self._is_stuck = is_stuck
+        self.is_disabled = Event()
+
+    def run(self):
+        self._move_callback()
+
+    def _move_callback(self):
+        duration_sec = abs(self._duration_sec)
+        if self._speed < 0 or self._speed > 1:
+            raise RuntimeWarning("Speed must be a float number between 0 and 1.")
+        match self._direction:
+            case Direction.LEFT:
+                self._robot._left_motors.backward(self._speed)
+                self._robot._right_motors.forward(self._speed)
+            case Direction.RIGHT:
+                self._robot._left_motors.forward(self._speed)
+                self._robot._right_motors.backward(self._speed)
+            case Direction.FORWARD:
+                if self._is_stuck.is_set():
+                    return
+                self._robot._left_motors.forward(self._speed)
+                self._robot._right_motors.forward(self._speed)
+            case Direction.BACKWARD:
+                self._robot._left_motors.backward(self._speed)
+                self._robot._right_motors.backward(self._speed)
+
+        sleep(duration_sec)
+        if not self.is_disabled.is_set():
+            self._robot.stop()
+
+
 class Robot(object):
     """Controller for a robot with 2 sets of wheels (6V DC) and an ultrasonic sensor (HC-SR04)."""
 
@@ -56,65 +97,47 @@ class Robot(object):
                                                threshold_distance=0.6)
         self.distance_led = DistanceLed(**distance_led_pins, max_distance=2, distance_sensor=self._distance_sensor)
         self._auto_stop_event = Event()  # _auto_stop continues to work until this is set
-        self.disable_auto_stop()
-        self._escape_event = Event()  # forward move is disabled if this is set
+        self._is_stuck = Event()  # forward move is disabled if this is set
 
-        self._current_job_thread = None
-        self._auto_stop_thread = Thread(target=self._auto_stop, args=())
-        self._auto_stop_thread.daemon = True
-        self._auto_stop_thread.start()
+        self._current_move_thread: CurrentMove = None
+        self._auto_stop_thread = None
 
     def _auto_stop(self):
         while not self._auto_stop_event.is_set():
             # If robot is in range of the obstacle then activate escape event and disable auto stop until escaped
             if self._distance_sensor.in_range:
-                self.stop()
-                self._auto_stop_event.set()
-                self._escape_event.set()
+                self._is_stuck.set()
+                if self._current_move_thread is not None and self._current_move_thread._direction == Direction.FORWARD:
+                    self._current_move_thread.is_disabled.set()
+                    self.stop()
+            else:
+                self._is_stuck.clear()
+
             sleep(0.1)
 
     def enable_auto_stop(self):
         self._auto_stop_event.clear()
-        self._escape_event.clear()
+        self._is_stuck.clear()
+        self._auto_stop_thread = Thread(target=self._auto_stop, args=())
+        self._auto_stop_thread.daemon = True
+        self._auto_stop_thread.start()
 
     def disable_auto_stop(self):
         self._auto_stop_event.set()
-        self._escape_event.clear()
+        self._is_stuck.clear()
 
     def stop(self):
+        if self._current_move_thread is not None:
+            self._current_move_thread.is_disabled.set()
         self._left_motors.stop()
         self._right_motors.stop()
 
-    def _move_callback(self, direction: Direction, duration_sec: float, speed: float):
-        duration_sec = abs(duration_sec)
-        if speed < 0 or speed > 1:
-            raise RuntimeWarning("Speed must be a float number between 0 and 1.")
-        match direction:
-            case Direction.LEFT:
-                self._left_motors.backward(speed)
-                self._right_motors.forward(speed)
-            case Direction.RIGHT:
-                self._left_motors.forward(speed)
-                self._right_motors.backward(speed)
-            case Direction.FORWARD:
-                if self._escape_event.is_set() and self._distance_sensor.in_range:
-                    return
-                self._left_motors.forward(speed)
-                self._right_motors.forward(speed)
-            case Direction.BACKWARD:
-                self._left_motors.backward(speed)
-                self._right_motors.backward(speed)
-
-        sleep(duration_sec)
-        self.stop()
-        #  Enable auto stop daemon if escaped from the obstacle
-        if self._escape_event.is_set():
-            if not self._distance_sensor.in_range:
-                self.enable_auto_stop()
-
     def move(self, direction: Direction, duration_sec: float, speed: float):
-        self._current_job_thread = Thread(target=self._move_callback, args=(direction, duration_sec, speed))
-        self._current_job_thread.start()
+        if self._current_move_thread is not None:
+            self._current_move_thread.is_disabled.set()
+
+        self._current_move_thread = CurrentMove(self, direction, duration_sec, speed, self._is_stuck)
+        self._current_move_thread.start()
 
 
 if __name__ == "__main__":

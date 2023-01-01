@@ -1,5 +1,6 @@
-from robot import Robot, Direction
 import curses
+
+from robot import Direction, Robot
 
 
 robot = Robot(left_motor_pins={"forward": 5, "backward": 6, "enable": 12},

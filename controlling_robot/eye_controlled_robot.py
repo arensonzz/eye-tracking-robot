@@ -1,10 +1,13 @@
 from robot import Robot, Direction
-from paho.mqtt.client import mqtt
+import paho.mqtt.client as mqtt
 
 robot = Robot(left_motor_pins={"forward": 5, "backward": 6, "enable": 12},
               right_motor_pins={"forward": 19, "backward": 26, "enable": 13},
               distance_led_pins={"red": 18, "green": 15, "blue": 14},
               distance_sensor_pins={"trigger": 16, "echo": 21})
+
+robot.enable_auto_stop()
+robot.distance_led.on()
 
 
 def on_message(client, userdata, message):
@@ -15,9 +18,9 @@ def on_message(client, userdata, message):
         case "right":
             robot.move(Direction.RIGHT, 0.5, 0.6)
         case "up":
-            robot.move(Direction.FORWARD, 0.5, 0.8)
+            robot.move(Direction.FORWARD, 0.5, 0.6)
         case "down":
-            robot.move(Direction.BACKWARD, 0.5, 0.8)
+            robot.move(Direction.BACKWARD, 0.5, 0.6)
         case "center":
             robot.stop()
 
