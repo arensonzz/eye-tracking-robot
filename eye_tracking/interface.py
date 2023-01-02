@@ -1,9 +1,7 @@
 import sys
-import threading
-from threading import Event, Thread
-import time
+from threading import Event
 
-from PyQt5.QtGui import QColor, QFont, QImage, QPixmap
+from PyQt5.QtGui import QColor, QFont
 from PyQt5.QtWidgets import (
     QApplication,
     QGroupBox,
@@ -12,8 +10,6 @@ from PyQt5.QtWidgets import (
     QMainWindow,
     QPushButton,
 )
-import cv2
-import paho.mqtt.client as mqtt
 
 from app import client
 from app.eye_tracking import EyeTrackingThread, SendPositionThread
@@ -30,9 +26,9 @@ class main_GUI(QMainWindow):
         self.is_eye_tracking_stopped = Event()
 
         # image box ekleme
-        self.imageBox = QLabel(self)
-        self.imageBox.setGeometry(10, 10, 1600, 1000)
-        self.imageBox.setText("")
+        self.image_box = QLabel(self)
+        self.image_box.setGeometry(10, 10, 1600, 1200)
+        self.image_box.setText("")
         # self.imageBox.setAutoFillBackground(True)
         color = QColor(0, 0, 0)
         alpha = 140
@@ -41,8 +37,8 @@ class main_GUI(QMainWindow):
                                              b=color.blue(),
                                              a=alpha
                                              )
-        self.imageBox.setStyleSheet("QLabel { background-color: rgba(" + values + "); }")
-        self.imageBox.show()
+        self.image_box.setStyleSheet("QLabel { background-color: rgba(" + values + "); }")
+        self.image_box.show()
 
         # Haberleşme ayar paneli
         self.comm_gb = QGroupBox(self)
@@ -102,11 +98,11 @@ class main_GUI(QMainWindow):
         self.ip_label.show()
 
         # Port textbox
-        self.port_txb = QLineEdit(self)
-        self.port_txb.setGeometry(1700, 95, 180, 25)
-        self.port_txb.setStyleSheet("border: 2px solid rgb(255,214,216);color:rgb(255, 255, 255);")
-        self.port_txb.setText("")
-        self.port_txb.show()
+        self.port_tbx = QLineEdit(self)
+        self.port_tbx.setGeometry(1700, 95, 180, 25)
+        self.port_tbx.setStyleSheet("border: 2px solid rgb(255,214,216);color:rgb(255, 255, 255);")
+        self.port_tbx.setText("")
+        self.port_tbx.show()
 
         self.port_label = QLabel(self)
         self.port_label.setGeometry(1640, 95, 50, 20)
@@ -121,49 +117,25 @@ class main_GUI(QMainWindow):
         self.conn_stop_btn.clicked.connect(self.connection_stop)
 
     def eye_tracking_start(self):
+        self.is_eye_tracking_stopped.clear()
         if self.eye_tracking_thread is None:
-            self.eye_tracking_thread = EyeTrackingThread(self.is_eye_tracking_stopped)
+            self.eye_tracking_thread = EyeTrackingThread(self.is_eye_tracking_stopped, self.image_box)
             self.eye_tracking_thread.daemon = True
             self.eye_tracking_thread.start()
 
         if self.send_position_thread is not None:
             self.eye_tracking_thread.position_counts = self.send_position_thread.position_counts
 
-        self.is_eye_tracking_stopped.clear()
-
-        try:
-            self.video_show_thread = Thread(target=self.video_capture)
-            self.video_show_thread.daemon = True
-            self.video_show_thread.start()
-        except Exception as ex:
-            print(ex)
         self.eye_tracking_start_btn.setEnabled(False)
-        self.eye_tracking_start_btn.setEnabled(True)
-
-    def video_capture(self):
-        while not self.is_eye_tracking_stopped.is_set():
-            try:
-                frame = self.eye_tracking_thread.frame
-                if frame is not None:
-                    height, width, channel = frame.shape
-                    frame = cv2.resize(frame, None, fx=1, fy=1, interpolation=cv2.INTER_NEAREST)
-                    # frame = cv2.resize(frame, (1600,900))
-                    frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                    bpl = channel * width
-                    frame = QImage(frame.data, width, height, bpl, QImage.Format_RGB888)
-                    self.imageBox.setPixmap(QPixmap(frame))
-                time.sleep(0.007)
-            except Exception as ex:
-                print("Warning: Eye tracking has not started!")
-                print(ex)
+        self.eye_tracking_stop_btn.setEnabled(True)
 
     def eye_tracking_stop(self):
         #  self.cap.release()
-        self.
-        self.imageBox.clear()
+        self.image_box.clear()
         self.is_eye_tracking_stopped.set()
-        self.eye_tracking_start_btn.setEnabled(True)
+        self.eye_tracking_thread = None
         self.eye_tracking_stop_btn.setEnabled(False)
+        self.eye_tracking_start_btn.setEnabled(True)
 
     def on_message(message):
         payload = message.payload.decode("utf-8")
@@ -173,29 +145,38 @@ class main_GUI(QMainWindow):
         # Connect to mqtt broker first time button is pressed
         # and initialize send_position_thread
         if self.send_position_thread is None:
-            ip_no = self.ui.ip_tbx.text()
-            port_no = int(self.ui.port_tbx.text())
-            client.connect(host=ip_no, port=port_no)  # connect to broker
-            client.loop_start()  # start the loop
-            client.subscribe("eye_tracking/pc")
-            client.on_message = self.on_message
+            try:
+                ip_no = self.ip_tbx.text()
+                port_no = int(self.port_tbx.text())
+                client.connect(host=ip_no, port=port_no)  # connect to broker
+                client.loop_start()  # start the loop
+                client.subscribe("eye_tracking/pc")
+                client.on_message = self.on_message
+            except Exception as ex:
+                print(ex)
+            self.is_send_position_stopped.clear()
             self.send_position_thread = SendPositionThread(self.is_send_position_stopped)
             # Share positiong_counts from send_position to eye_tracking for automatic update
             if self.eye_tracking_thread is not None:
                 self.eye_tracking_thread.position_counts = self.send_position_thread.position_counts
             self.send_position_thread.daemon = True
             self.send_position_thread.start()
-        # Restart thread if stopped
-        self.is_send_position_stopped.clear()
+
+        self.conn_start_btn.setEnabled(False)
+        self.conn_stop_btn.setEnabled(True)
 
     def connection_stop(self):
         self.is_send_position_stopped.set()
+        client.loop_stop()
+        self.send_position_thread = None
+        self.conn_stop_btn.setEnabled(False)
+        self.conn_start_btn.setEnabled(True)
 
 
 app = QApplication(sys.argv)
 main_GUI = main_GUI()
 main_GUI.showMaximized()
-main_GUI.setWindowTitle("Multi-Gruop-80-GUI")
+main_GUI.setWindowTitle("Multi-Group-80-GUI")
 main_GUI.setStyleSheet("background-color:rgb(47,79,79);")
 main_GUI.show()
 app.exec()

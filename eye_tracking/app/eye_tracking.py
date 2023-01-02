@@ -1,10 +1,11 @@
 import math
 from threading import Event, Thread
 
+from PyQt5.QtGui import QImage, QPixmap
+from PyQt5.QtWidgets import QLabel
 import cv2 as cv
 import mediapipe as mp
 import numpy as np
-from time import sleep
 
 from . import client
 
@@ -39,16 +40,22 @@ class SendPositionThread(Thread):
             for key, val in arr:
                 if val > max[1]:
                     max = (key, val)
-            print(max)
             if max[1] >= 10:
+                print("Sending: ", max)
                 client.publish("eye_tracking/rpi", max[0])
 
-            self.position_counts = {"left": 0, "right": 0, "up": 0, "down": 0, "center": 0}
+            self.position_counts["left"] = 0
+            self.position_counts["right"] = 0
+            self.position_counts["up"] = 0
+            self.position_counts["down"] = 0
+            self.position_counts["center"] = 0
 
 
 class EyeTrackingThread(Thread):
-    def __init__(self, event: Event):
+    def __init__(self, event: Event, image_box: QLabel = None):
         Thread.__init__(self)
+
+        self.image_box = image_box
         self.stopped = event
 
         self.position_counts = None
@@ -98,7 +105,7 @@ class EyeTrackingThread(Thread):
             min_detection_confidence=0.5,
             min_tracking_confidence=0.5
         ) as face_mesh:
-            while not self.stopped.is_set():
+            while not self.stopped.wait(0.00001):
                 ret, self.frame = self.video_capture.read()
                 if not ret:
                     break
@@ -141,6 +148,7 @@ class EyeTrackingThread(Thread):
                         cv.putText(self.frame, "blink", (10, 70), cv.FONT_HERSHEY_SIMPLEX, 1.0, (255, 0, 0), 3)
 
                     else:
+                        #  print("Position: ", position_of_iris)
                         cv.putText(self.frame, position_of_iris, (10, 70), cv.FONT_HERSHEY_SIMPLEX, 1.0, (255, 0, 0), 3)
 
                     if self.counter != 0:
@@ -151,6 +159,20 @@ class EyeTrackingThread(Thread):
                 if self.blink_counter >= 2:
                     self.blink_counter = 0
 
+                if self.image_box is not None:
+                    height, width, channel = self.frame.shape
+                    frame = cv.resize(self.frame, None, fx=1, fy=1, interpolation=cv.INTER_NEAREST)
+                    #  frame = cv.resize(self.frame, (1600, 900))
+                    frame = cv.cvtColor(frame, cv.COLOR_BGR2RGB)
+                    bpl = channel * width
+                    frame = QImage(frame.data, width, height, bpl, QImage.Format_RGB888)
+                    self.image_box.setPixmap(QPixmap(frame))
+                else:
+                    cv.imshow('Mask', eye_tracking_thread.mask)
+                    cv.imshow('img', eye_tracking_thread.frame)
+                    key = cv.waitKey(1)
+                    if key == ord('q'):
+                        stop_tracking.set()
                 # Save frames as video
                 #  self.video.write(self.frame)
 
@@ -161,12 +183,5 @@ if __name__ == "__main__":
     eye_tracking_thread = EyeTrackingThread(stop_tracking)
     #  eye_tracking_thread.video_capture = cv.VideoCapture(0)
     eye_tracking_thread.start()
-    while not stop_tracking.is_set():
-        if eye_tracking_thread.mask is not None and eye_tracking_thread.frame is not None:
-            cv.imshow('Mask', eye_tracking_thread.mask)
-            cv.imshow('img', eye_tracking_thread.frame)
-            key = cv.waitKey(1)
-            if key == ord('q'):
-                stop_tracking.set()
-        sleep(0.1)
+    eye_tracking_thread.join()
     cv.destroyAllWindows()
