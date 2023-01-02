@@ -31,7 +31,7 @@ class SendPositionThread(Thread):
     def __init__(self, event):
         Thread.__init__(self)
         self.stopped = event
-        self.position_counts = {"left": 0, "right": 0, "up": 0, "down": 0, "center": 0}
+        self.position_counts = {"left": 0, "right": 0, "up": 0, "down": 0, "center": 0, "blink": 0}
 
     def run(self):
         while not self.stopped.wait(1.5):
@@ -40,8 +40,10 @@ class SendPositionThread(Thread):
             for key, val in arr:
                 if val > max[1]:
                     max = (key, val)
+            if self.position_counts["blink"] != 0:
+                print("Blink count: ", self.position_counts["blink"])
             if max[1] >= 10:
-                print("Sending: ", max)
+                print("Sending move: ", max)
                 client.publish("eye_tracking/rpi", max[0])
 
             self.position_counts["left"] = 0
@@ -49,6 +51,7 @@ class SendPositionThread(Thread):
             self.position_counts["up"] = 0
             self.position_counts["down"] = 0
             self.position_counts["center"] = 0
+            self.position_counts["blink"] = 0
 
 
 class EyeTrackingThread(Thread):
@@ -134,8 +137,6 @@ class EyeTrackingThread(Thread):
                                                                                           mesh_points[R_H_LEFT][0],
                                                                                           mesh_points[U_H_RIGHT],
                                                                                           mesh_points[D_H_RIGHT][0])
-                    if self.position_counts is not None:
-                        self.position_counts[position_of_iris] += 1
                     ratio = (total2 / total1) * 100
                     self.ratio_list.append(ratio)
                     if len(self.ratio_list) > 3:
@@ -143,11 +144,16 @@ class EyeTrackingThread(Thread):
                     ratio_avg = sum(self.ratio_list) / len(self.ratio_list)
 
                     if ratio_avg < 45 and self.counter == 0:
+                        # Person blinked
                         self.blink_counter += 1
                         self.counter = 1
                         cv.putText(self.frame, "blink", (10, 70), cv.FONT_HERSHEY_SIMPLEX, 1.0, (255, 0, 0), 3)
-
+                        if self.position_counts is not None:
+                            self.position_counts["blink"] += 1
                     else:
+                        # Person did not blink
+                        if self.position_counts is not None:
+                            self.position_counts[position_of_iris] += 1
                         #  print("Position: ", position_of_iris)
                         cv.putText(self.frame, position_of_iris, (10, 70), cv.FONT_HERSHEY_SIMPLEX, 1.0, (255, 0, 0), 3)
 
@@ -160,14 +166,17 @@ class EyeTrackingThread(Thread):
                     self.blink_counter = 0
 
                 if self.image_box is not None:
-                    height, width, channel = self.frame.shape
-                    frame = cv.resize(self.frame, None, fx=1, fy=1, interpolation=cv.INTER_NEAREST)
-                    #  frame = cv.resize(self.frame, (1600, 900))
-                    frame = cv.cvtColor(frame, cv.COLOR_BGR2RGB)
-                    bpl = channel * width
-                    frame = QImage(frame.data, width, height, bpl, QImage.Format_RGB888)
-                    self.image_box.setPixmap(QPixmap(frame))
+                    # Display current frame in PyQt5 GUI
+                    scale_percent = 250  # percent of original size
+                    width = int(self.frame.shape[1] * scale_percent / 100)
+                    height = int(self.frame.shape[0] * scale_percent / 100)
+                    dim = (width, height)
+                    resized_img = cv.resize(self.frame, dim, interpolation=cv.INTER_AREA)
+                    q_image = QImage(resized_img.data, resized_img.shape[1], resized_img.shape[0],
+                                     QImage.Format_RGB888).rgbSwapped()
+                    self.image_box.setPixmap(QPixmap.fromImage(q_image))
                 else:
+                    # Display current frame in opencv GUI
                     cv.imshow('Mask', eye_tracking_thread.mask)
                     cv.imshow('img', eye_tracking_thread.frame)
                     key = cv.waitKey(1)

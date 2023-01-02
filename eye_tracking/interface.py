@@ -1,4 +1,5 @@
 import sys
+import cv2 as cv
 from threading import Event
 
 from PyQt5.QtGui import QColor, QFont
@@ -133,6 +134,7 @@ class main_GUI(QMainWindow):
         #  self.cap.release()
         self.image_box.clear()
         self.is_eye_tracking_stopped.set()
+        self.eye_tracking_thread.video_capture.release()
         self.eye_tracking_thread = None
         self.eye_tracking_stop_btn.setEnabled(False)
         self.eye_tracking_start_btn.setEnabled(True)
@@ -179,5 +181,4 @@ main_GUI.showMaximized()
 main_GUI.setWindowTitle("Multi-Group-80-GUI")
 main_GUI.setStyleSheet("background-color:rgb(47,79,79);")
 main_GUI.show()
-app.exec()
-#  video_capture.release()
+sys.exit(app.exec())
