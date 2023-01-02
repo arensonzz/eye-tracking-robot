@@ -9,6 +9,7 @@ from PyQt5.QtWidgets import (
     QLabel,
     QLineEdit,
     QMainWindow,
+    QMessageBox,
     QPushButton,
 )
 
@@ -26,6 +27,10 @@ class main_GUI(QMainWindow):
         self.eye_tracking_thread: EyeTrackingThread = None
         self.is_eye_tracking_stopped = Event()
 
+        self.dialog = QMessageBox(self)
+        self.dialog.setWindowTitle("Warning")
+        self.dialog.setStyleSheet("color:rgb(255,255,255);")
+        self.dialog.setFont(QFont('Trebuchet MS', 12))
         # image box ekleme
         self.image_box = QLabel(self)
         self.image_box.setGeometry(10, 10, 1600, 1200)
@@ -69,6 +74,7 @@ class main_GUI(QMainWindow):
         self.eye_tracking_stop_btn.setText("Stop Tracking")
         self.eye_tracking_stop_btn.setStyleSheet("color:rgb(255,255,255);")
         self.eye_tracking_stop_btn.setFont(QFont('Times', 12))
+        self.eye_tracking_stop_btn.setEnabled(False)
 
         # Bağlantı kurma butonu
         self.conn_start_btn = QPushButton(self)
@@ -83,6 +89,7 @@ class main_GUI(QMainWindow):
         self.conn_stop_btn.setText("Stop Sending Commands")
         self.conn_stop_btn.setStyleSheet("color:rgb(255,255,255);")
         self.conn_stop_btn.setFont(QFont('Times', 12))
+        self.conn_stop_btn.setEnabled(False)
 
         # IP textbox
         self.ip_tbx = QLineEdit(self)
@@ -118,23 +125,27 @@ class main_GUI(QMainWindow):
         self.conn_stop_btn.clicked.connect(self.connection_stop)
 
     def eye_tracking_start(self):
-        self.is_eye_tracking_stopped.clear()
-        if self.eye_tracking_thread is None:
+        try:
+            self.is_eye_tracking_stopped.clear()
             self.eye_tracking_thread = EyeTrackingThread(self.is_eye_tracking_stopped, self.image_box)
             self.eye_tracking_thread.daemon = True
             self.eye_tracking_thread.start()
 
-        if self.send_position_thread is not None:
-            self.eye_tracking_thread.position_counts = self.send_position_thread.position_counts
+            if self.send_position_thread is not None:
+                self.eye_tracking_thread.position_counts = self.send_position_thread.position_counts
 
-        self.eye_tracking_start_btn.setEnabled(False)
-        self.eye_tracking_stop_btn.setEnabled(True)
+            self.eye_tracking_start_btn.setEnabled(False)
+            self.eye_tracking_stop_btn.setEnabled(True)
+        except Exception as ex:
+            print(type(ex).__name__)
+            print(ex)
+            self.dialog.setText(str(ex))
+            self.dialog.exec()
 
     def eye_tracking_stop(self):
-        #  self.cap.release()
-        self.image_box.clear()
         self.is_eye_tracking_stopped.set()
         self.eye_tracking_thread.video_capture.release()
+        self.image_box.clear()
         self.eye_tracking_thread = None
         self.eye_tracking_stop_btn.setEnabled(False)
         self.eye_tracking_start_btn.setEnabled(True)
@@ -144,28 +155,60 @@ class main_GUI(QMainWindow):
         print(payload)
 
     def connection_start(self):
+        class EmptyIpException(Exception):
+            """Exception raised when IP field is left empty."""
+
+            def __init__(self, *args: object) -> None:
+                super().__init__(*args)
+
+        class EmptyPortException(Exception):
+            """Exception raised when port field is left empty."""
+
+            def __init__(self, *args: object) -> None:
+                super().__init__(*args)
+
         # Connect to mqtt broker first time button is pressed
         # and initialize send_position_thread
-        if self.send_position_thread is None:
+        try:
+            ip_no = self.ip_tbx.text()
+            port_no = self.port_tbx.text()
+            if not(ip_no and ip_no.strip()):
+                raise EmptyIpException("IP number cannot be empty.")
+            if not(port_no and port_no.strip()):
+                raise EmptyPortException("Port number cannot be empty.")
+            port_no = int(port_no)
+            client.connect(host=ip_no, port=port_no)  # connect to broker
+            client.loop_start()  # start the loop
+            client.subscribe("eye_tracking/pc")
+            client.on_message = self.on_message
+        except (EmptyIpException, EmptyPortException) as ex:
+            self.dialog.setText(str(ex))
+            self.dialog.exec()
+        except ValueError:
+            self.dialog.setText("""Port number is not an integer.""")
+            self.dialog.exec()
+        except Exception as ex:
+            print(type(ex).__name__)
+            print(ex)
+            self.dialog.setText("Could not connect to the Raspberry Pi. Make sure the device is on and connection settings are correct.")
+            self.dialog.exec()
+        else:
             try:
-                ip_no = self.ip_tbx.text()
-                port_no = int(self.port_tbx.text())
-                client.connect(host=ip_no, port=port_no)  # connect to broker
-                client.loop_start()  # start the loop
-                client.subscribe("eye_tracking/pc")
-                client.on_message = self.on_message
-            except Exception as ex:
-                print(ex)
-            self.is_send_position_stopped.clear()
-            self.send_position_thread = SendPositionThread(self.is_send_position_stopped)
-            # Share positiong_counts from send_position to eye_tracking for automatic update
-            if self.eye_tracking_thread is not None:
-                self.eye_tracking_thread.position_counts = self.send_position_thread.position_counts
-            self.send_position_thread.daemon = True
-            self.send_position_thread.start()
+                self.is_send_position_stopped.clear()
+                self.send_position_thread = SendPositionThread(self.is_send_position_stopped)
+                # Share positiong_counts from send_position to eye_tracking for automatic update
+                if self.eye_tracking_thread is not None:
+                    self.eye_tracking_thread.position_counts = self.send_position_thread.position_counts
+                self.send_position_thread.daemon = True
+                self.send_position_thread.start()
 
-        self.conn_start_btn.setEnabled(False)
-        self.conn_stop_btn.setEnabled(True)
+                self.conn_start_btn.setEnabled(False)
+                self.conn_stop_btn.setEnabled(True)
+            except Exception as ex:
+                print(type(ex).__name__)
+                print(ex)
+                self.dialog.setText(str(ex))
+                self.dialog.exec()
 
     def connection_stop(self):
         self.is_send_position_stopped.set()

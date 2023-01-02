@@ -31,7 +31,7 @@ class SendPositionThread(Thread):
     def __init__(self, event):
         Thread.__init__(self)
         self.stopped = event
-        self.position_counts = {"left": 0, "right": 0, "up": 0, "down": 0, "center": 0, "blink": 0}
+        self.position_counts = {"left": 0, "right": 0, "up": 0, "down": 0, "center": 0}
 
     def run(self):
         while not self.stopped.wait(1.5):
@@ -40,8 +40,6 @@ class SendPositionThread(Thread):
             for key, val in arr:
                 if val > max[1]:
                     max = (key, val)
-            if self.position_counts["blink"] != 0:
-                print("Blink count: ", self.position_counts["blink"])
             if max[1] >= 10:
                 print("Sending move: ", max)
                 client.publish("eye_tracking/rpi", max[0])
@@ -51,7 +49,6 @@ class SendPositionThread(Thread):
             self.position_counts["up"] = 0
             self.position_counts["down"] = 0
             self.position_counts["center"] = 0
-            self.position_counts["blink"] = 0
 
 
 class EyeTrackingThread(Thread):
@@ -190,7 +187,6 @@ if __name__ == "__main__":
     stop_tracking = Event()
     position_counts = {"left": 0, "right": 0, "up": 0, "down": 0, "center": 0}
     eye_tracking_thread = EyeTrackingThread(stop_tracking)
-    #  eye_tracking_thread.video_capture = cv.VideoCapture(0)
     eye_tracking_thread.start()
     eye_tracking_thread.join()
     cv.destroyAllWindows()
