@@ -1,5 +1,4 @@
 import sys
-import cv2 as cv
 from threading import Event
 
 from PyQt5.QtGui import QColor, QFont
@@ -62,6 +61,13 @@ class main_GUI(QMainWindow):
         self.video_gb.setGeometry(1630, 270, 275, 350)
         self.video_gb.show()
 
+        self.direction_gb = QGroupBox(self)
+        self.direction_gb.setObjectName("direction_gb")
+        self.direction_gb.setTitle("Detected Direction")
+        self.direction_gb.setStyleSheet("QGroupBox#direction_gb{font-size: 20px ;font-weight:bold;color:rgb(204, 204, 255)}")
+        self.direction_gb.setGeometry(1630, 640, 275, 350)
+        self.direction_gb.show()
+
         # Görüntü İşleme Başlatma Butonu
         self.eye_tracking_start_btn = QPushButton(self)
         self.eye_tracking_start_btn.setGeometry(1640, 320, 240, 35)
@@ -75,6 +81,14 @@ class main_GUI(QMainWindow):
         self.eye_tracking_stop_btn.setStyleSheet("color:rgb(255,255,255);")
         self.eye_tracking_stop_btn.setFont(QFont('Times', 12))
         self.eye_tracking_stop_btn.setEnabled(False)
+
+        # Detected direction textbox
+        self.detected_direction_tbx = QLabel(self)
+        self.detected_direction_tbx.setGeometry(1640, 700, 120, 20)
+        self.detected_direction_tbx.setText("")
+        self.detected_direction_tbx.setStyleSheet("color:rgb(255, 255, 255);")
+        self.detected_direction_tbx.setFont(QFont('Trebuchet MS', 11, QFont.Bold))
+        self.detected_direction_tbx.show()
 
         # Bağlantı kurma butonu
         self.conn_start_btn = QPushButton(self)
@@ -195,7 +209,8 @@ class main_GUI(QMainWindow):
         else:
             try:
                 self.is_send_position_stopped.clear()
-                self.send_position_thread = SendPositionThread(self.is_send_position_stopped)
+                self.send_position_thread = SendPositionThread(self.is_send_position_stopped,
+                                                               self.detected_direction_tbx)
                 # Share positiong_counts from send_position to eye_tracking for automatic update
                 if self.eye_tracking_thread is not None:
                     self.eye_tracking_thread.position_counts = self.send_position_thread.position_counts
@@ -213,6 +228,7 @@ class main_GUI(QMainWindow):
     def connection_stop(self):
         self.is_send_position_stopped.set()
         client.loop_stop()
+        self.detected_direction_tbx.setText("")
         self.send_position_thread = None
         self.conn_stop_btn.setEnabled(False)
         self.conn_start_btn.setEnabled(True)

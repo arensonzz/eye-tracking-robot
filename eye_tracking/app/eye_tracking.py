@@ -28,8 +28,9 @@ D_H_RIGHT = [374]
 
 
 class SendPositionThread(Thread):
-    def __init__(self, event):
+    def __init__(self, event: Event, detected_direction_tbx: QLabel = None):
         Thread.__init__(self)
+        self.detected_direction_tbx = detected_direction_tbx
         self.stopped = event
         self.position_counts = {"left": 0, "right": 0, "up": 0, "down": 0, "center": 0}
 
@@ -42,6 +43,8 @@ class SendPositionThread(Thread):
                     max = (key, val)
             if max[1] >= 10:
                 print("Sending move: ", max)
+                if self.detected_direction_tbx is not None:
+                    self.detected_direction_tbx.setText(max[0])
                 client.publish("eye_tracking/rpi", max[0])
 
             self.position_counts["left"] = 0
@@ -52,7 +55,7 @@ class SendPositionThread(Thread):
 
 
 class EyeTrackingThread(Thread):
-    def __init__(self, event: Event, image_box: QLabel = None):
+    def __init__(self, event: Event, image_box: QLabel = None, ):
         Thread.__init__(self)
 
         self.image_box = image_box
@@ -145,8 +148,6 @@ class EyeTrackingThread(Thread):
                         self.blink_counter += 1
                         self.counter = 1
                         cv.putText(self.frame, "blink", (10, 70), cv.FONT_HERSHEY_SIMPLEX, 1.0, (255, 0, 0), 3)
-                        if self.position_counts is not None:
-                            self.position_counts["blink"] += 1
                     else:
                         # Person did not blink
                         if self.position_counts is not None:
