@@ -22,9 +22,11 @@ class main_GUI(QMainWindow):
         # Eye tracking related threads
         self.send_position_thread: SendPositionThread = None
         self.is_send_position_stopped = Event()
+        self.is_send_position_stopped.set()
 
         self.eye_tracking_thread: EyeTrackingThread = None
         self.is_eye_tracking_stopped = Event()
+        self.is_eye_tracking_stopped.set()
 
         self.dialog = QMessageBox(self)
         self.dialog.setWindowTitle("Warning")

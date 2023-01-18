@@ -100,6 +100,16 @@ class EyeTrackingThread(Thread):
             position_of_iris: str = "left"
         return position_of_iris, ratio_r2l, ratio_u2d, total_r2l_distance, total_u2d_distance
 
+    def display_cv_frame(self, frame):
+        scale_percent = 250  # percent of original size
+        width = int(frame.shape[1] * scale_percent / 100)
+        height = int(frame.shape[0] * scale_percent / 100)
+        dim = (width, height)
+        resized_img = cv.resize(frame, dim, interpolation=cv.INTER_AREA)
+        q_image = QImage(resized_img.data, resized_img.shape[1], resized_img.shape[0],
+                         QImage.Format_RGB888).rgbSwapped()
+        self.image_box.setPixmap(QPixmap.fromImage(q_image))
+
     def run(self):
         # Start position thread
         with self.mp_face_mesh.FaceMesh(
@@ -165,21 +175,15 @@ class EyeTrackingThread(Thread):
 
                 if self.image_box is not None:
                     # Display current frame in PyQt5 GUI
-                    scale_percent = 250  # percent of original size
-                    width = int(self.frame.shape[1] * scale_percent / 100)
-                    height = int(self.frame.shape[0] * scale_percent / 100)
-                    dim = (width, height)
-                    resized_img = cv.resize(self.frame, dim, interpolation=cv.INTER_AREA)
-                    q_image = QImage(resized_img.data, resized_img.shape[1], resized_img.shape[0],
-                                     QImage.Format_RGB888).rgbSwapped()
-                    self.image_box.setPixmap(QPixmap.fromImage(q_image))
+                    self.display_cv_frame(self.frame)
+
                 else:
                     # Display current frame in opencv GUI
                     cv.imshow('Mask', eye_tracking_thread.mask)
                     cv.imshow('img', eye_tracking_thread.frame)
                     key = cv.waitKey(1)
                     if key == ord('q'):
-                        stop_tracking.set()
+                        self.stopped.set()
                 # Save frames as video
                 #  self.video.write(self.frame)
 
