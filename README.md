@@ -11,7 +11,6 @@ themselves.
 
 * The robot.
 
-
     <table>
       <tr>
         <td colspan="2"><img src="README/robot_side.jpg" alt="Side view of the robot."/></td>
@@ -24,8 +23,6 @@ themselves.
         <td colspan="2"><img src="README/robot_back.jpg" alt="Back view of the robot."/></td>
       </tr>
     </table>
-    <table>
-    
 
 
 <!-- START doctoc generated TOC please keep comment here to allow auto update -->
