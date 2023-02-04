@@ -11,9 +11,21 @@ themselves.
 
 * The robot.
 
+    <img src="README/robot_side.jpg"
+         alt=""
+         style="margin: 10px 30px; max-width: 600px" />
+
     <img src="README/robot.jpg"
          alt="Picture of the robot."
+         style="margin: 10px 5px 10px 30px; max-height: 400px" />
+    <img src="README/robot_batteries.jpg"
+         alt=""
+         style="margin: 10px 30px 10px 5px; max-height: 400px" />
+
+    <img src="README/robot_back.jpg"
+         alt=""
          style="margin: 10px 30px; max-width: 600px" />
+
 
 <!-- START doctoc generated TOC please keep comment here to allow auto update -->
 <!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
