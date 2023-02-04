@@ -14,14 +14,14 @@ themselves.
 
     <table>
       <tr>
-        <td colspan="2"><img src="README/robot_side.jpg" alt="Side view of the robot." style="max-width: 600px"/></td>
+        <td colspan="2"><img src="README/robot_side.jpg" alt="Side view of the robot."/></td>
       </tr>
       <tr>
-        <td><img style="max-height: 400px" src="README/robot.jpg" alt="Front view of the robot."/></td> 
-        <td><img style="max-height: 400px" src="README/robot_batteries.jpg" alt="Battery compartment of the robot."/></td>
+        <td><img src="README/robot.jpg" alt="Front view of the robot."/></td> 
+        <td><img src="README/robot_batteries.jpg" alt="Battery compartment of the robot."/></td>
       </tr>
       <tr>
-        <td colspan="2"><img src="README/robot_back.jpg" alt="Back view of the robot." style="max-width: 600px" /></td>
+        <td colspan="2"><img src="README/robot_back.jpg" alt="Back view of the robot."/></td>
       </tr>
     </table>
     <table>
